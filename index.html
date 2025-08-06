@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia Interativo de Receitas Saudáveis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals & Subtle Greens -->
+    <!-- Application Structure Plan: A dashboard-style SPA. The core is a filterable grid of recipe cards. Users can filter by meal type (Café da Manhã, Almoço/Jantar, etc.). Clicking a card opens a modal with full recipe details. This structure is superior to a linear document as it allows users to quickly find relevant information based on their immediate need (e.g., "what to cook for dinner?"). A donut chart provides a visual summary of recipe categories, enhancing the data-driven feel. This task-oriented design prioritizes usability and efficient navigation. -->
+    <!-- Visualization & Content Choices: Recipes are presented as interactive cards (HTML/CSS) to encourage exploration. Clicking opens a modal (JS) to keep the main UI clean. The primary data interaction is filtering by category (JS). A donut chart (Chart.js/Canvas) visualizes the proportion of recipes per meal type, offering a quick, high-level overview of the content. This choice helps users understand the scope of the guide at a glance. A new button on the modal uses the Gemini API to provide a dynamic nutritional analysis, adding an educational and interactive layer to each recipe. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF6;
+            color: #3C3C3C;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 350px;
+            height: auto;
+            margin: auto;
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+        .filter-btn.active {
+            background-color: #7A9E7E;
+            color: #FFFFFF;
+            font-weight: 700;
+        }
+        .recipe-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .recipe-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-6 py-4 text-center">
+            <h1 class="text-3xl font-bold text-[#7A9E7E]">Guia de Receitas Saudáveis</h1>
+            <p class="text-gray-600 mt-1">Sua jornada para uma alimentação leve, rápida e econômica.</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-8 md:py-12">
+        
+        <section id="intro" class="text-center mb-12">
+            <h2 class="text-2xl font-bold mb-4">Bem-vindo(a)!</h2>
+            <p class="max-w-3xl mx-auto text-gray-700">
+                Este guia foi criado para desmistificar a ideia de que perder peso requer receitas complicadas ou ingredientes caros. Explore nossas 10 receitas rápidas e econômicas, pensadas para transformar sua rotina alimentar de forma simples e prazerosa.
+            </p>
+        </section>
+
+        <section id="filters" class="mb-10">
+            <div class="flex flex-wrap justify-center gap-2 md:gap-4">
+                <button data-category="all" class="filter-btn active px-4 py-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-colors">Todos</button>
+                <button data-category="cafe-da-manha" class="filter-btn px-4 py-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-colors">Café da Manhã & Lanches</button>
+                <button data-category="almoco-jantar" class="filter-btn px-4 py-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-colors">Almoço & Jantar</button>
+                <button data-category="saladas-sopas" class="filter-btn px-4 py-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-colors">Saladas & Sopas</button>
+            </div>
+        </section>
+
+        <section id="recipe-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+        </section>
+
+        <section id="visualizacao" class="mt-16 py-12 bg-white rounded-xl shadow-sm">
+            <h2 class="text-2xl font-bold text-center mb-2">Visão Geral das Receitas</h2>
+            <p class="text-center text-gray-600 mb-8">Distribuição das receitas por categoria.</p>
+            <div class="chart-container">
+                <canvas id="recipeChart"></canvas>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white mt-12">
+        <div class="container mx-auto px-6 py-8 text-center text-gray-600">
+            <p class="font-bold mb-2">Continue sua Jornada!</p>
+            <p>Lembre-se de beber bastante água e buscar sempre o equilíbrio. Pequenas mudanças geram grandes resultados.</p>
+        </div>
+    </footer>
+
+    <div id="recipeModal" class="modal invisible opacity-0 fixed inset-0 w-full h-full bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="modal-content transform scale-95 bg-white w-full max-w-2xl max-h-[90vh] rounded-xl shadow-2xl flex flex-col">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="modalTitle" class="text-2xl font-bold text-[#7A9E7E]"></h3>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <div class="mb-6">
+                    <h4 class="font-bold text-lg mb-2 text-gray-800">Ingredientes</h4>
+                    <ul id="modalIngredients" class="list-disc list-inside space-y-1 text-gray-700"></ul>
+                </div>
+                <div>
+                    <h4 class="font-bold text-lg mb-2 text-gray-800">Modo de Preparo</h4>
+                    <ol id="modalSteps" class="list-decimal list-inside space-y-2 text-gray-700"></ol>
+                </div>
+                <div class="mt-6 pt-6 border-t border-gray-200">
+                    <button id="getNutritionBtn" class="w-full bg-[#7A9E7E] text-white font-bold py-2 px-4 rounded-xl shadow-sm hover:bg-[#688a6c] transition-colors flex items-center justify-center">
+                        Análise Nutricional ✨
+                    </button>
+                    <div id="nutritionLoading" class="hidden mt-4 text-center text-gray-500">
+                        <p>Carregando análise...</p>
+                    </div>
+                    <div id="nutritionResult" class="hidden mt-4 bg-gray-50 p-4 rounded-xl text-sm">
+                        <h4 class="font-bold text-base mb-2 text-gray-800">Análise da Receita</h4>
+                        <p id="nutritionText" class="text-gray-700"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const recipes = [
+                { id: 1, title: 'Omelete de Vegetais', icon: '🍳', category: 'cafe-da-manha', ingredients: ['2 ovos', '1/4 de cebola picada', '1 tomate pequeno picado', '1/2 xícara de espinafre', 'Sal e pimenta a gosto'], steps: ['Em uma tigela, bata os ovos com sal e pimenta.', 'Em uma frigideira antiaderente aquecida, refogue a cebola, o tomate e o espinafre.', 'Despeje os ovos batidos sobre os vegetais e cozinhe em fogo baixo até firmar.'] },
+                { id: 2, title: 'Salada de Frango com Milho e Cenoura', icon: '🥗', category: 'saladas-sopas', ingredients: ['100g de peito de frango cozido e desfiado', '1/2 xícara de milho', '1/2 cenoura ralada', '1 colher de sopa de iogurte natural desnatado ou azeite de oliva', 'Sal e cheiro-verde a gosto'], steps: ['Misture todos os ingredientes em uma tigela.', 'Tempere com sal e cheiro-verde. Sirva fria.'] },
+                { id: 3, title: 'Crepioca com Queijo e Orégano', icon: '🥞', category: 'cafe-da-manha', ingredients: ['1 ovo', '2 colheres de sopa de goma de tapioca', '1 fatia de queijo branco (ou mussarela)', 'Orégano a gosto'], steps: ['Misture o ovo e a goma de tapioca em uma tigela pequena.', 'Aqueça uma frigideira e despeje a massa. Quando a base estiver firme, vire.', 'Adicione o queijo e o orégano em uma metade da crepioca e dobre. Sirva quando o queijo derreter.'] },
+                { id: 4, title: 'Tilápia Assada com Limão e Alecrim', icon: '🐟', category: 'almoco-jantar', ingredients: ['1 filé de tilápia', 'Suco de 1/2 limão', '1 ramo de alecrim', 'Sal, pimenta-do-reino e azeite a gosto'], steps: ['Tempere o filé com sal, pimenta e um fio de azeite.', 'Coloque em uma assadeira, regue com o suco de limão e adicione o alecrim.', 'Asse em forno pré-aquecido a 180°C por cerca de 15 a 20 minutos.'] },
+                { id: 5, title: 'Purê de Abóbora com Frango Grelhado', icon: '🎃', category: 'almoco-jantar', ingredients: ['200g de abóbora cozida', '1 lasca de gengibre ralado', '1 filé de peito de frango', 'Sal, pimenta e azeite a gosto'], steps: ['Amasse a abóbora cozida, adicione o gengibre ralado e sal a gosto.', 'Grelhe o filé de frango temperado em uma frigideira até ficar dourado e cozido por completo.', 'Sirva o purê com o frango por cima.'] },
+                { id: 6, title: 'Sopa de Legumes com Lentilha', icon: '🍲', category: 'saladas-sopas', ingredients: ['1/2 xícara de lentilha', '1 batata pequena, 1 cenoura pequena, 1/4 de abobrinha picados', '1 dente de alho e 1/4 de cebola', 'Sal e cheiro-verde a gosto'], steps: ['Refogue a cebola e o alho em uma panela.', 'Adicione a lentilha e os legumes, cubra com água e cozinhe até que fiquem macios.'] },
+                { id: 7, title: 'Salada de Grão de Bico com Atum', icon: '🥙', category: 'saladas-sopas', ingredients: ['1 xícara de grão de bico cozido', '1 lata de atum (em água)', '1/2 cebola roxa picada e tomate picado', 'Suco de limão, azeite e sal a gosto'], steps: ['Combine todos os ingredientes em uma tigela grande.', 'Tempere com limão, azeite e sal. Misture bem e sirva.'] },
+                { id: 8, title: 'Iogurte Natural com Frutas e Aveia', icon: '🍓', category: 'cafe-da-manha', ingredients: ['1 pote de iogurte natural desnatado', '1/2 xícara de frutas picadas (morango, banana, maçã)', '2 colheres de sopa de aveia em flocos'], steps: ['Misture todos os ingredientes em uma tigela.'] },
+                { id: 9, title: 'Frango com Brócolis e Arroz Integral', icon: '🥦', category: 'almoco-jantar', ingredients: ['1 filé de peito de frango', '1 xícara de brócolis cozido no vapor', '1/2 xícara de arroz integral cozido', 'Alho, azeite e sal a gosto'], steps: ['Grelhe o filé de frango temperado com alho.', 'Em outra panela, refogue o brócolis no azeite com um pouco de alho.', 'Sirva o frango e o brócolis com o arroz integral.'] },
+                { id: 10, title: 'Mingau de Aveia com Canela', icon: '🥣', category: 'cafe-da-manha', ingredients: ['2 colheres de sopa de aveia em flocos', '1/2 xícara de leite ou bebida vegetal', '1 colher de chá de canela em pó'], steps: ['Em uma panela pequena, misture a aveia, o leite e a canela.', 'Leve ao fogo baixo, mexendo sempre, até a mistura engrossar.'] }
+            ];
+
+            const recipeGrid = document.getElementById('recipe-grid');
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            const modal = document.getElementById('recipeModal');
+            const closeModalBtn = document.getElementById('closeModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalIngredients = document.getElementById('modalIngredients');
+            const modalSteps = document.getElementById('modalSteps');
+            const getNutritionBtn = document.getElementById('getNutritionBtn');
+            const nutritionLoading = document.getElementById('nutritionLoading');
+            const nutritionResult = document.getElementById('nutritionResult');
+            const nutritionText = document.getElementById('nutritionText');
+
+            let currentRecipe = null;
+
+            function renderRecipes(recipesToRender) {
+                recipeGrid.innerHTML = '';
+                recipesToRender.forEach(recipe => {
+                    const card = document.createElement('div');
+                    card.className = 'recipe-card cursor-pointer bg-white rounded-xl shadow-sm p-6 flex flex-col items-center text-center';
+                    card.dataset.id = recipe.id;
+                    card.innerHTML = `
+                        <div class="text-5xl mb-4">${recipe.icon}</div>
+                        <h3 class="font-bold text-lg text-gray-800">${recipe.title}</h3>
+                    `;
+                    recipeGrid.appendChild(card);
+                });
+            }
+
+            function openModal(recipe) {
+                currentRecipe = recipe;
+                modalTitle.textContent = recipe.title;
+                modalIngredients.innerHTML = recipe.ingredients.map(ing => `<li>${ing}</li>`).join('');
+                modalSteps.innerHTML = recipe.steps.map(step => `<li>${step}</li>`).join('');
+                nutritionResult.classList.add('hidden');
+                nutritionText.textContent = '';
+                modal.classList.remove('invisible', 'opacity-0');
+                modal.querySelector('.modal-content').classList.remove('scale-95');
+                modal.querySelector('.modal-content').classList.add('scale-100');
+            }
+
+            function closeModal() {
+                modal.classList.add('invisible', 'opacity-0');
+                modal.querySelector('.modal-content').classList.add('scale-95');
+                modal.querySelector('.modal-content').classList.remove('scale-100');
+            }
+
+            async function getNutritionalAnalysis() {
+                if (!currentRecipe) return;
+
+                nutritionLoading.classList.remove('hidden');
+                nutritionResult.classList.add('hidden');
+                getNutritionBtn.disabled = true;
+
+                const prompt = `Forneça uma análise nutricional concisa para a receita "${currentRecipe.title}". A receita inclui os seguintes ingredientes: ${currentRecipe.ingredients.join(', ')}. Destaque os principais benefícios para a saúde, o perfil de macronutrientes (proteínas, carboidratos, gorduras) e qualquer outro ponto nutricional relevante em formato de texto.`;
+
+                try {
+                    let chatHistory = [];
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = "" 
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        nutritionText.textContent = text;
+                        nutritionResult.classList.remove('hidden');
+                    } else {
+                        nutritionText.textContent = 'Não foi possível gerar a análise nutricional.';
+                        nutritionResult.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    nutritionText.textContent = 'Erro ao conectar com o serviço de análise nutricional.';
+                    nutritionResult.classList.remove('hidden');
+                } finally {
+                    nutritionLoading.classList.add('hidden');
+                    getNutritionBtn.disabled = false;
+                }
+            }
+
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const category = button.dataset.category;
+                    
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    const filteredRecipes = category === 'all'
+                        ? recipes
+                        : recipes.filter(recipe => recipe.category === category);
+                    
+                    renderRecipes(filteredRecipes);
+                });
+            });
+
+            recipeGrid.addEventListener('click', (e) => {
+                const card = e.target.closest('.recipe-card');
+                if (card) {
+                    const recipeId = parseInt(card.dataset.id, 10);
+                    const recipe = recipes.find(r => r.id === recipeId);
+                    if (recipe) {
+                        openModal(recipe);
+                    }
+                }
+            });
+
+            closeModalBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+
+            getNutritionBtn.addEventListener('click', getNutritionalAnalysis);
+
+            renderRecipes(recipes);
+
+            const ctx = document.getElementById('recipeChart').getContext('2d');
+            const categoryCounts = recipes.reduce((acc, recipe) => {
+                acc[recipe.category] = (acc[recipe.category] || 0) + 1;
+                return acc;
+            }, {});
+
+            const chartLabels = {
+                'cafe-da-manha': 'Café da Manhã & Lanches',
+                'almoco-jantar': 'Almoço & Jantar',
+                'saladas-sopas': 'Saladas & Sopas'
+            };
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categoryCounts).map(key => chartLabels[key]),
+                    datasets: [{
+                        label: 'Nº de Receitas',
+                        data: Object.values(categoryCounts),
+                        backgroundColor: [
+                            '#D4A373',
+                            '#7A9E7E',
+                            '#A3B18A',
+                        ],
+                        borderColor: '#FDFBF6',
+                        borderWidth: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    family: 'Inter',
+                                    size: 14
+                                },
+                                color: '#3C3C3C'
+                            }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        });
+    </script>
+</body>
+</html>
